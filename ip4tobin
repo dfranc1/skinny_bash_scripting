@@ -1,0 +1,140 @@
+#!/bin/bash
+
+# Script: ip4tobin
+# Description: Convert an IP address from decimal to binary.
+# Author: Daniele Franceschini
+# Date: 12-28-2023
+
+
+# Function to check if the 'bc' command is available on the system
+check_bc() {
+    if ! command -v bc &>/dev/null; then
+        echo "Error: The 'bc' command is not available on this system. Please install it."
+        exit 1
+    fi
+}
+
+# Function to check the execution permissions of the script.
+check_permissions() {
+    if [ ! -x "$0" ]; then
+        echo "Error: Insufficient permissions to execute this script."
+        exit 1
+    fi
+}
+
+# Initialize the variables with the default values.
+show_dots=true
+show_details=false
+
+# unction to print the use of the command
+usage() {
+    echo "Usage: $(basename "$0") [OPTIONS] IP_ADDRESS"
+    echo "Convert an IP address from decimal to binary."
+    echo ""
+    echo "Options:"
+    echo "  -h, --help     Show this help message and exit"
+    echo "  -nd, --nodot   Do not display dots between octets"
+    echo "  -d, --details  Show detailed output with headers for each octet"
+    exit 0
+}
+
+if [ "$#" -eq 0 ]; then
+    echo "Error: IP address argument is missing. Usage: $(basename "$0") [OPTIONS] IP_ADDRESS" >&2
+    usage
+fi
+
+# Check the availability of 'bc' and execution permissions
+check_bc
+check_permissions
+
+# Process the arguments using getopts
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            usage
+            ;;
+        -nd|--nodot)
+            show_dots=false
+            shift
+            ;;
+        -d|--details)
+            show_details=true
+            shift
+            ;;
+        -*)
+            echo "Invalid option: $1" >&2
+            usage
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+# Handling Argument Parsing Errors:
+if [ "$#" -ne 1 ]; then
+    echo "Error: Invalid usage. $(basename "$0") [OPTIONS] IP_ADDRESS" >&2
+    usage
+fi
+
+# Function to convert an IP from decimal to binary
+ip_v4_to_binary() {
+    local ip="$1"
+    local binary_ip=""
+
+    # Function to verify if an octet is valid
+    is_valid_octet() {
+        local octet="$1"
+        if [ "$octet" -ge 0 ] && [ "$octet" -le 255 ]; then
+            return 0  # Octet valid
+        else
+            return 1  # Octet not valid
+        fi
+    }
+
+    # Function to convert an octet to binary with zeroes
+    convert_to_binary() {
+        local octet="$1"
+        local binary=$(echo "obase=2;ibase=10;$octet" | bc)
+        printf "%08d" "$binary"
+    }
+
+    IFS=. read -r i1 i2 i3 i4 <<< "$ip"
+
+    # Check if the octets of the IP are valid
+    if ! is_valid_octet "$i1" || ! is_valid_octet "$i2" || ! is_valid_octet "$i3" || ! is_valid_octet "$i4"; then
+        echo "Invalid IP address: $ip"
+        return 1
+    fi
+
+    # Convert the octets to binary
+    binary_i1="$(convert_to_binary "$i1")"
+    binary_i2="$(convert_to_binary "$i2")"
+    binary_i3="$(convert_to_binary "$i3")"
+    binary_i4="$(convert_to_binary "$i4")"
+
+    # Handling Unexpected Errors
+    if [ -z "$binary_i1" ] || [ -z "$binary_i2" ] || [ -z "$binary_i3" ] || [ -z "$binary_i4" ]; then
+        echo "Error: An unexpected error occurred during conversion." >&2
+        exit 1
+    fi
+
+    # Create the output with or without dots between the octets
+    if [ "$show_dots" = true ]; then
+        binary_ip="$binary_i1.$binary_i2.$binary_i3.$binary_i4"
+    else
+        binary_ip="$binary_i1$binary_i2$binary_i3$binary_i4"
+    fi
+
+    # Show the detailed output with headers
+    if [ "$show_details" = true ]; then
+        echo "IP Address: $ip"
+        echo "Octet 1  | Octet 2  | Octet 3  | Octet 4 "
+        echo "$binary_i1 | $binary_i2 | $binary_i3 | $binary_i4"
+    else
+        echo "$binary_ip"
+    fi
+}
+
+# Execute the function with the IP address
+ip_v4_to_binary "$1"
